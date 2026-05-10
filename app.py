@@ -8,6 +8,7 @@
 import json
 import random
 import re
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -20,6 +21,7 @@ st.set_page_config(
 )
 
 DATA_PATH = Path(__file__).parent / "data.json"
+HISTORY_PATH = Path(__file__).parent / "history.json"
 KAZ_KEYS = ["ә", "ө", "ұ", "ү", "ң", "қ", "ғ", "і", "һ"]
 
 THEMES = [
@@ -269,10 +271,53 @@ def init_state():
         "feedback": None,             # None | True | False
         "selected_option": None,      # для fill — какую кнопку выбрал
         "answer_mode": "type",        # type | choice | mixed
+        "session_themes": [],         # темы текущей сессии (для истории)
+        "session_types": [],          # типы текущей сессии (для истории)
+        "history_saved": False,       # флаг — записали ли в history.json
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+
+
+def load_history():
+    if not HISTORY_PATH.exists():
+        return []
+    try:
+        with open(HISTORY_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def save_session_to_history():
+    """Записывает результаты текущей сессии в history.json (один раз)."""
+    if st.session_state.history_saved:
+        return
+    if not st.session_state.queue:
+        return
+    theme_id_to_name = {t["id"]: t["name"] for t in THEMES}
+    record = {
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "themes": st.session_state.session_themes,
+        "theme_names": [theme_id_to_name.get(t, str(t)) for t in st.session_state.session_themes],
+        "types": st.session_state.session_types,
+        "answer_mode": st.session_state.answer_mode,
+        "total": len(st.session_state.queue),
+        "correct": st.session_state.correct,
+        "percent": round(st.session_state.correct / len(st.session_state.queue) * 100)
+                   if st.session_state.queue else 0,
+        "errors_by_theme": {str(k): v for k, v in st.session_state.errors_by_theme.items()},
+    }
+    history = load_history()
+    history.append(record)
+    try:
+        with open(HISTORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        st.session_state.history_saved = True
+    except Exception as e:
+        st.warning(f"Не удалось сохранить историю: {e}")
 
 
 def start_quiz(theme_ids, types, count, answer_mode):
@@ -290,6 +335,9 @@ def start_quiz(theme_ids, types, count, answer_mode):
     if count != "all":
         pool = pool[: int(count)]
     st.session_state.answer_mode = answer_mode
+    st.session_state.session_themes = list(theme_ids)
+    st.session_state.session_types = list(types)
+    st.session_state.history_saved = False
     st.session_state.queue = [(item, set(types)) for item in pool]
     st.session_state.index = 0
     st.session_state.correct = 0
@@ -366,6 +414,16 @@ def virtual_kaz_keyboard():
 def screen_start():
     st.title("📚 Бәйшешек — қазақ тілі тесті")
     st.caption("5-сынып, 2-бөлім · тест на знание слов и выражений (темы 7-13)")
+    history = load_history()
+    if history:
+        last = history[-1]
+        st.caption(
+            f"💾 Сохранено сессий: **{len(history)}** · "
+            f"последняя: {last['correct']}/{last['total']} ({last['percent']}%) · "
+            f"подробности — на странице **«📊 Тарих»** в боковом меню"
+        )
+    else:
+        st.caption("📊 Сводка результатов появится в боковом меню «Тарих» после первого теста.")
 
     counts = {"word": 0, "phrase": 0, "fill": 0}
     for q in QUESTIONS:
@@ -525,6 +583,7 @@ def show_feedback():
 
 
 def screen_result():
+    save_session_to_history()
     st.title("🏁 Тест аяқталды!")
     total = len(st.session_state.queue)
     correct = st.session_state.correct
@@ -561,6 +620,7 @@ def screen_result():
         st.session_state.index = 0
         st.session_state.correct = 0
         st.session_state.errors_by_theme = {}
+        st.session_state.history_saved = False
         item, allowed = st.session_state.queue[0]
         st.session_state.current_q = build_question(item, allowed, st.session_state.answer_mode)
         st.session_state.user_answer = ""

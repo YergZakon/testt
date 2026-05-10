@@ -19,3 +19,6 @@ env/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Личная история результатов — у каждого пользователя своя
+history.json
