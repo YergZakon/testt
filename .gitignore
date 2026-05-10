@@ -1,0 +1,21 @@
+# Учебник под копирайтом — не коммитим
+136.pdf
+*.pdf
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+venv/
+.venv/
+env/
+
+# Локальная конфигурация Claude Code для preview-сервера
+.claude/
+
+# Streamlit
+.streamlit/secrets.toml

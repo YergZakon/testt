@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="UTF-8">
+<title>Бәйшешек — қазақ тілі тесті</title>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --primary: #1976d2;
+    --primary-dark: #115293;
+    --accent: #ff9800;
+    --good: #2e7d32;
+    --bad: #c62828;
+    --text: #222;
+    --muted: #666;
+    --border: #ddd;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: var(--bg); color: var(--text); }
+  body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+  h1 { margin: 0 0 4px; color: var(--primary-dark); font-size: 24px; text-align: center; }
+  .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 14px; text-align: center; }
+  .card {
+    background: var(--card); border-radius: 12px; padding: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    width: 100%; max-width: 640px;
+  }
+  .group { margin-bottom: 20px; }
+  .group-title { font-weight: 600; margin-bottom: 8px; color: var(--primary-dark); font-size: 15px; }
+  .checkbox-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .checkbox-list label {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #eef3f8; padding: 8px 14px; border-radius: 20px;
+    cursor: pointer; font-size: 14px; user-select: none;
+  }
+  .checkbox-list label:hover { background: #dde7f1; }
+  .checkbox-list input { margin: 0; }
+  .btn {
+    background: var(--primary); color: white; border: none; padding: 12px 28px;
+    border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: 600;
+    transition: background 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--primary-dark); }
+  .btn:disabled { background: #aaa; cursor: not-allowed; }
+  .btn.secondary { background: #e0e0e0; color: #222; }
+  .btn.secondary:hover:not(:disabled) { background: #c5c5c5; }
+  .btn.accent { background: var(--accent); }
+  .btn.accent:hover:not(:disabled) { background: #e68900; }
+  .actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+  .stats { color: var(--muted); font-size: 14px; text-align: right; margin-bottom: 12px; }
+  .question {
+    font-size: 22px; line-height: 1.4; text-align: center;
+    margin: 24px 0; min-height: 60px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .direction-badge {
+    display: inline-block; background: var(--accent); color: white;
+    padding: 4px 12px; border-radius: 16px; font-size: 12px;
+    font-weight: 600; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .hint { color: var(--muted); font-size: 14px; text-align: center; margin-top: -12px; margin-bottom: 12px; }
+  input[type="text"] {
+    width: 100%; padding: 12px 16px; font-size: 18px;
+    border: 2px solid var(--border); border-radius: 8px;
+    outline: none; transition: border-color 0.15s;
+  }
+  input[type="text"]:focus { border-color: var(--primary); }
+  .virtual-keyboard {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+    margin-top: 12px;
+  }
+  .vkey {
+    background: #eef3f8; border: 1px solid var(--border);
+    padding: 8px 14px; border-radius: 6px; cursor: pointer;
+    font-size: 18px; min-width: 40px; text-align: center;
+    user-select: none;
+  }
+  .vkey:hover { background: #dde7f1; }
+  .options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+  .option-btn {
+    background: #f0f4f8; border: 2px solid transparent;
+    padding: 14px 18px; border-radius: 8px; cursor: pointer;
+    font-size: 17px; text-align: left; transition: all 0.15s;
+  }
+  .option-btn:hover:not(:disabled) { background: #e0eaf3; border-color: var(--primary); }
+  .option-btn.correct { background: #e8f5e9; border-color: var(--good); color: var(--good); font-weight: 600; }
+  .option-btn.wrong { background: #ffebee; border-color: var(--bad); color: var(--bad); }
+  .option-btn:disabled { cursor: not-allowed; }
+  .feedback {
+    padding: 14px 18px; border-radius: 8px; margin-top: 16px;
+    text-align: center; font-size: 16px;
+  }
+  .feedback.good { background: #e8f5e9; color: var(--good); border: 1px solid var(--good); }
+  .feedback.bad { background: #ffebee; color: var(--bad); border: 1px solid var(--bad); }
+  .feedback strong { display: block; margin-top: 6px; font-size: 18px; }
+  .progress-bar {
+    background: #e0e0e0; height: 6px; border-radius: 3px;
+    overflow: hidden; margin-bottom: 16px;
+  }
+  .progress-fill {
+    background: var(--primary); height: 100%;
+    transition: width 0.3s;
+  }
+  .result {
+    text-align: center; padding: 24px 0;
+  }
+  .result .score {
+    font-size: 48px; font-weight: 700; color: var(--primary-dark); margin: 12px 0;
+  }
+  .result .percent {
+    font-size: 24px; color: var(--muted); margin-bottom: 8px;
+  }
+  .result .verdict {
+    font-size: 18px; margin: 16px 0; padding: 12px;
+    border-radius: 8px; background: #eef3f8;
+  }
+  .hide { display: none !important; }
+  @media (max-width: 600px) {
+    .card { padding: 16px; }
+    .question { font-size: 18px; }
+    h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+  <h1>Бәйшешек — қазақ тілі тесті</h1>
+  <div class="subtitle">5-сынып, 2-бөлім · тест на знание слов и выражений</div>
+
+  <!-- Стартовый экран -->
+  <div id="screen-start" class="card">
+    <div class="group">
+      <div class="group-title">Тақырыптар (темы)</div>
+      <div class="checkbox-list" id="theme-list"></div>
+    </div>
+    <div class="group">
+      <div class="group-title">Тапсырма түрі (тип задания)</div>
+      <div class="checkbox-list" id="type-list">
+        <label><input type="checkbox" value="word_kk_ru" checked> Сөз kk → ru</label>
+        <label><input type="checkbox" value="word_ru_kk" checked> Сөз ru → kk</label>
+        <label><input type="checkbox" value="phrase" checked> Сөйлем (фразы)</label>
+        <label><input type="checkbox" value="fill" checked> Бос орынды толтыру</label>
+      </div>
+    </div>
+    <div class="group">
+      <div class="group-title">Сұрақтар саны</div>
+      <div class="checkbox-list">
+        <label><input type="radio" name="count" value="10" checked> 10</label>
+        <label><input type="radio" name="count" value="20"> 20</label>
+        <label><input type="radio" name="count" value="40"> 40</label>
+        <label><input type="radio" name="count" value="all"> Барлығы (все)</label>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-start">Бастау · Начать</button>
+    </div>
+    <div id="db-info" class="subtitle" style="margin-top: 16px; margin-bottom: 0;"></div>
+  </div>
+
+  <!-- Экран вопроса -->
+  <div id="screen-quiz" class="card hide">
+    <div class="stats" id="stats">0 / 0 · дұрыс: 0</div>
+    <div class="progress-bar"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
+    <div style="text-align: center;"><span class="direction-badge" id="direction-badge"></span></div>
+    <div class="question" id="question"></div>
+    <div class="hint" id="hint"></div>
+
+    <div id="answer-text-wrap">
+      <input type="text" id="answer-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Жауабыңызды жазыңыз...">
+      <div class="virtual-keyboard" id="vk"></div>
+    </div>
+
+    <div id="answer-options-wrap" class="options hide"></div>
+
+    <div id="feedback" class="feedback hide"></div>
+
+    <div class="actions">
+      <button class="btn" id="btn-check">Тексеру · Проверить</button>
+      <button class="btn accent hide" id="btn-next">Келесі · Следующий →</button>
+      <button class="btn secondary" id="btn-quit">Шығу</button>
+    </div>
+  </div>
+
+  <!-- Экран результата -->
+  <div id="screen-result" class="card hide">
+    <div class="result">
+      <div>Тест аяқталды!</div>
+      <div class="score" id="result-score">0 / 0</div>
+      <div class="percent" id="result-percent">0%</div>
+      <div class="verdict" id="result-verdict"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-restart">Қайтадан · Заново</button>
+      <button class="btn secondary" id="btn-home">Басты бетке · К началу</button>
+    </div>
+  </div>
+
+<script src="data.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  // ------------- Темы -------------
+  const THEMES = [
+    { id: 7,  name: 'Денсаулық — зор байлық', ru: 'Здоровье' },
+    { id: 8,  name: 'Менің тәуелсіз Қазақстаным', ru: 'Казахстан' },
+    { id: 9,  name: 'Аспан әлемінің құпиясы', ru: 'Космос' },
+    { id: 10, name: 'Компьютердің тілін табу', ru: 'Компьютер' },
+    { id: 11, name: 'Қазақстандағы ұлттар достастығы', ru: 'Народы' },
+    { id: 12, name: 'Ұлы дала табиғаты', ru: 'Природа' },
+    { id: 13, name: 'Ер есімі — ел есінде', ru: 'Герои' },
+  ];
+
+  // ------------- Состояние -------------
+  let currentQueue = [];   // Активная последовательность вопросов
+  let currentIndex = 0;
+  let correctCount = 0;
+  let currentQuestion = null;  // Сгенерированный объект {prompt, expected[], type, hint, ...}
+  let currentMode = null;      // 'text' или 'options'
+
+  // ------------- Утилиты -------------
+  const $ = id => document.getElementById(id);
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function normalize(s) {
+    return String(s).trim().toLowerCase()
+      .replace(/[ёЁ]/g, 'е')
+      .replace(/\s+/g, ' ')
+      .replace(/[.!?,;:"'«»()]/g, '');
+  }
+
+  function checkAnswer(input, expected) {
+    const norm = normalize(input);
+    if (!norm) return false;
+    const list = Array.isArray(expected) ? expected : [expected];
+    return list.some(e => normalize(e) === norm);
+  }
+
+  // ------------- Генерация вопроса из объекта QUESTIONS -------------
+  function buildQuestion(item, allowedTypes) {
+    // Из элемента типа "word" может получиться kk→ru или ru→kk вопрос — в зависимости от allowedTypes
+    if (item.type === 'word') {
+      const variants = [];
+      if (allowedTypes.has('word_kk_ru')) variants.push('kk_ru');
+      if (allowedTypes.has('word_ru_kk')) variants.push('ru_kk');
+      if (variants.length === 0) return null;
+      const dir = pickRandom(variants);
+      if (dir === 'kk_ru') {
+        return {
+          mode: 'text',
+          direction: 'kk → ru',
+          prompt: item.kk,
+          hint: 'переведите на русский',
+          expected: item.ru,
+          showKazKeyboard: false,
+        };
+      } else {
+        const ruPrompt = Array.isArray(item.ru) ? item.ru[0] : item.ru;
+        return {
+          mode: 'text',
+          direction: 'ru → kk',
+          prompt: ruPrompt,
+          hint: 'переведите на казахский',
+          expected: item.kk,
+          showKazKeyboard: true,
+        };
+      }
+    }
+    if (item.type === 'phrase') {
+      if (!allowedTypes.has('phrase')) return null;
+      // У фраз может быть направление либо фиксированное (item.dir), либо случайное
+      const dir = item.dir || pickRandom(['kk_ru', 'ru_kk']);
+      if (dir === 'kk_ru') {
+        return {
+          mode: 'text',
+          direction: 'фраза kk → ru',
+          prompt: item.kk,
+          hint: 'переведите фразу на русский',
+          expected: item.ru,
+          showKazKeyboard: false,
+        };
+      } else {
+        const ruPrompt = Array.isArray(item.ru) ? item.ru[0] : item.ru;
+        return {
+          mode: 'text',
+          direction: 'фраза ru → kk',
+          prompt: ruPrompt,
+          hint: 'переведите фразу на казахский',
+          expected: item.kk,
+          showKazKeyboard: true,
+        };
+      }
+    }
+    if (item.type === 'fill') {
+      if (!allowedTypes.has('fill')) return null;
+      return {
+        mode: 'options',
+        direction: 'бос орын',
+        prompt: item.template,
+        hint: item.hint || 'выберите подходящее слово',
+        expected: item.answer,
+        options: shuffle(item.options || []),
+      };
+    }
+    return null;
+  }
+
+  // ------------- Подготовка очереди вопросов -------------
+  function prepareQueue() {
+    const selectedThemes = new Set(
+      Array.from(document.querySelectorAll('#theme-list input:checked')).map(cb => Number(cb.value))
+    );
+    const allowedTypes = new Set(
+      Array.from(document.querySelectorAll('#type-list input:checked')).map(cb => cb.value)
+    );
+
+    if (selectedThemes.size === 0 || allowedTypes.size === 0) {
+      alert('Кем дегенде бір тақырып пен бір тапсырма түрін таңдаңыз / Выберите хотя бы одну тему и один тип задания');
+      return null;
+    }
+
+    // Фильтруем элементы базы по теме
+    let pool = QUESTIONS.filter(item => selectedThemes.has(item.theme));
+
+    // Фильтруем по разрешённому типу (word элементы валидны если хотя бы одно направление выбрано)
+    pool = pool.filter(item => {
+      if (item.type === 'word')   return allowedTypes.has('word_kk_ru') || allowedTypes.has('word_ru_kk');
+      if (item.type === 'phrase') return allowedTypes.has('phrase');
+      if (item.type === 'fill')   return allowedTypes.has('fill');
+      return false;
+    });
+
+    if (pool.length === 0) {
+      alert('Таңдалған параметрлерге сәйкес сұрақтар жоқ / Нет вопросов под выбранные параметры');
+      return null;
+    }
+
+    // Перемешиваем и обрезаем по выбранному количеству
+    pool = shuffle(pool);
+    const countSel = document.querySelector('input[name="count"]:checked').value;
+    if (countSel !== 'all') {
+      const n = parseInt(countSel, 10);
+      if (pool.length > n) pool = pool.slice(0, n);
+    }
+
+    return { pool, allowedTypes };
+  }
+
+  // ------------- Инициализация UI -------------
+  function initThemeList() {
+    const wrap = $('theme-list');
+    // "Все темы"
+    wrap.innerHTML =
+      `<label><input type="checkbox" value="all" id="theme-all" checked> Барлығы (все)</label>` +
+      THEMES.map(t => `<label><input type="checkbox" value="${t.id}" class="theme-cb" checked> ${t.id}. ${t.ru}</label>`).join('');
+
+    $('theme-all').addEventListener('change', e => {
+      document.querySelectorAll('.theme-cb').forEach(cb => cb.checked = e.target.checked);
+    });
+    document.querySelectorAll('.theme-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const allChecked = Array.from(document.querySelectorAll('.theme-cb')).every(c => c.checked);
+        $('theme-all').checked = allChecked;
+      });
+    });
+  }
+
+  function initVirtualKeyboard() {
+    const keys = ['ә', 'ө', 'ұ', 'ү', 'ң', 'қ', 'ғ', 'і', 'һ'];
+    const wrap = $('vk');
+    wrap.innerHTML = keys.map(k => `<button type="button" class="vkey" data-k="${k}">${k}</button>`).join('') +
+      `<button type="button" class="vkey" data-k="space">␣</button>` +
+      `<button type="button" class="vkey" data-k="backspace">⌫</button>`;
+    wrap.addEventListener('click', e => {
+      const btn = e.target.closest('.vkey');
+      if (!btn) return;
+      const k = btn.dataset.k;
+      const inp = $('answer-input');
+      const start = inp.selectionStart, end = inp.selectionEnd;
+      if (k === 'backspace') {
+        if (start === end && start > 0) {
+          inp.value = inp.value.slice(0, start - 1) + inp.value.slice(end);
+          inp.selectionStart = inp.selectionEnd = start - 1;
+        } else {
+          inp.value = inp.value.slice(0, start) + inp.value.slice(end);
+          inp.selectionStart = inp.selectionEnd = start;
+        }
+      } else {
+        const ch = (k === 'space') ? ' ' : k;
+        inp.value = inp.value.slice(0, start) + ch + inp.value.slice(end);
+        inp.selectionStart = inp.selectionEnd = start + ch.length;
+      }
+      inp.focus();
+    });
+  }
+
+  function showDbInfo() {
+    if (typeof QUESTIONS === 'undefined') {
+      $('db-info').textContent = '⚠️ data.js не загружен';
+      $('btn-start').disabled = true;
+      return;
+    }
+    const counts = { word: 0, phrase: 0, fill: 0 };
+    QUESTIONS.forEach(q => { if (counts[q.type] !== undefined) counts[q.type]++; });
+    $('db-info').textContent =
+      `База: ${QUESTIONS.length} единиц · ${counts.word} слов · ${counts.phrase} фраз · ${counts.fill} упражнений с пропусками`;
+  }
+
+  // ------------- Отрисовка вопроса -------------
+  function renderQuestion() {
+    const q = currentQuestion;
+    if (!q) return;
+
+    $('direction-badge').textContent = q.direction;
+    $('question').textContent = q.prompt;
+    $('hint').textContent = q.hint || '';
+    $('feedback').classList.add('hide');
+    $('btn-check').classList.remove('hide');
+    $('btn-check').disabled = false;
+    $('btn-next').classList.add('hide');
+
+    if (q.mode === 'text') {
+      $('answer-text-wrap').classList.remove('hide');
+      $('answer-options-wrap').classList.add('hide');
+      $('answer-input').value = '';
+      $('answer-input').disabled = false;
+      $('vk').style.display = q.showKazKeyboard ? '' : 'none';
+      setTimeout(() => $('answer-input').focus(), 50);
+    } else {
+      $('answer-text-wrap').classList.add('hide');
+      $('answer-options-wrap').classList.remove('hide');
+      $('answer-options-wrap').innerHTML = q.options.map(opt =>
+        `<button type="button" class="option-btn" data-v="${opt.replace(/"/g, '&quot;')}">${opt}</button>`
+      ).join('');
+      $('answer-options-wrap').querySelectorAll('.option-btn').forEach(btn => {
+        btn.addEventListener('click', () => handleOptionPick(btn));
+      });
+    }
+
+    updateStats();
+  }
+
+  function updateStats() {
+    const total = currentQueue.length;
+    const done = currentIndex;
+    $('stats').textContent = `${done + 1} / ${total} · дұрыс: ${correctCount}`;
+    $('progress').style.width = (done / total * 100) + '%';
+  }
+
+  function handleOptionPick(btn) {
+    if (btn.disabled) return;
+    const val = btn.dataset.v;
+    const correct = checkAnswer(val, currentQuestion.expected);
+    document.querySelectorAll('.option-btn').forEach(b => {
+      b.disabled = true;
+      const v = b.dataset.v;
+      if (checkAnswer(v, currentQuestion.expected)) b.classList.add('correct');
+      else if (b === btn) b.classList.add('wrong');
+    });
+    showFeedback(correct);
+  }
+
+  function handleCheck() {
+    const inp = $('answer-input');
+    const correct = checkAnswer(inp.value, currentQuestion.expected);
+    inp.disabled = true;
+    showFeedback(correct);
+  }
+
+  function showFeedback(correct) {
+    if (correct) correctCount++;
+    const fb = $('feedback');
+    fb.classList.remove('hide', 'good', 'bad');
+    fb.classList.add(correct ? 'good' : 'bad');
+    const exp = Array.isArray(currentQuestion.expected) ? currentQuestion.expected.join(' / ') : currentQuestion.expected;
+    fb.innerHTML = correct
+      ? `Дұрыс! ✓<strong>${exp}</strong>`
+      : `Қате ✗ Дұрыс жауап:<strong>${exp}</strong>`;
+    $('btn-check').classList.add('hide');
+    $('btn-next').classList.remove('hide');
+    $('btn-next').focus();
+    updateStats();
+  }
+
+  function handleNext() {
+    currentIndex++;
+    if (currentIndex >= currentQueue.length) {
+      showResult();
+    } else {
+      const item = currentQueue[currentIndex].item;
+      const allowedTypes = currentQueue[currentIndex].allowedTypes;
+      currentQuestion = buildQuestion(item, allowedTypes);
+      renderQuestion();
+    }
+  }
+
+  function showResult() {
+    $('screen-quiz').classList.add('hide');
+    $('screen-result').classList.remove('hide');
+    const total = currentQueue.length;
+    const pct = total > 0 ? Math.round(correctCount / total * 100) : 0;
+    $('result-score').textContent = `${correctCount} / ${total}`;
+    $('result-percent').textContent = `${pct}%`;
+    let verdict = '';
+    if (pct >= 90) verdict = '🌟 Тамаша! Сіз қазақ тілін өте жақсы білесіз.';
+    else if (pct >= 70) verdict = '👍 Жақсы! Жалғастыра беріңіз.';
+    else if (pct >= 50) verdict = '🙂 Орташа. Сөздерді қайталау керек.';
+    else verdict = '📚 Көбірек дайындалу қажет. Бастан қайталаңыз.';
+    $('result-verdict').textContent = verdict;
+  }
+
+  function startQuiz() {
+    const prep = prepareQueue();
+    if (!prep) return;
+    const allowedTypes = prep.allowedTypes;
+    currentQueue = prep.pool.map(item => ({ item, allowedTypes }));
+    currentIndex = 0;
+    correctCount = 0;
+    const first = buildQuestion(currentQueue[0].item, allowedTypes);
+    if (!first) {
+      alert('Не удалось сгенерировать вопрос — проверьте настройки');
+      return;
+    }
+    currentQuestion = first;
+    $('screen-start').classList.add('hide');
+    $('screen-result').classList.add('hide');
+    $('screen-quiz').classList.remove('hide');
+    renderQuestion();
+  }
+
+  function restart() {
+    $('screen-result').classList.add('hide');
+    $('screen-start').classList.add('hide');
+    $('screen-quiz').classList.remove('hide');
+    // Перемешиваем очередь заново
+    currentQueue = shuffle(currentQueue);
+    currentIndex = 0;
+    correctCount = 0;
+    const first = buildQuestion(currentQueue[0].item, currentQueue[0].allowedTypes);
+    currentQuestion = first;
+    renderQuestion();
+  }
+
+  function backToHome() {
+    $('screen-quiz').classList.add('hide');
+    $('screen-result').classList.add('hide');
+    $('screen-start').classList.remove('hide');
+  }
+
+  // ------------- Привязка событий -------------
+  document.addEventListener('DOMContentLoaded', () => {
+    initThemeList();
+    initVirtualKeyboard();
+    showDbInfo();
+    $('btn-start').addEventListener('click', startQuiz);
+    $('btn-check').addEventListener('click', handleCheck);
+    $('btn-next').addEventListener('click', handleNext);
+    $('btn-quit').addEventListener('click', () => {
+      if (confirm('Тестті аяқтайсыз ба? / Завершить тест?')) showResult();
+    });
+    $('btn-restart').addEventListener('click', restart);
+    $('btn-home').addEventListener('click', backToHome);
+    $('answer-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if ($('btn-check').classList.contains('hide')) handleNext();
+        else handleCheck();
+      }
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !$('btn-next').classList.contains('hide') && document.activeElement !== $('answer-input')) {
+        handleNext();
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
