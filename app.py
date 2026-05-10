@@ -282,18 +282,24 @@ def init_state():
 
 
 def load_history():
-    if not HISTORY_PATH.exists():
-        return []
-    try:
-        with open(HISTORY_PATH, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    """Primary — session_state, backup — file. См. pages/1_history.py."""
+    if "history_records" in st.session_state:
+        return st.session_state.history_records
+    if HISTORY_PATH.exists():
+        try:
+            with open(HISTORY_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                st.session_state.history_records = data
+                return data
+        except Exception:
+            pass
+    st.session_state.history_records = []
+    return st.session_state.history_records
 
 
 def save_session_to_history():
-    """Записывает результаты текущей сессии в history.json (один раз)."""
+    """Дописывает результаты текущей сессии в историю (один раз)."""
     if st.session_state.history_saved:
         return
     if not st.session_state.queue:
@@ -317,12 +323,15 @@ def save_session_to_history():
     }
     history = load_history()
     history.append(record)
+    # primary хранилище — session_state (всегда работает в рамках сессии браузера)
+    st.session_state.history_records = history
+    st.session_state.history_saved = True
+    # best-effort backup в файл (на Streamlit Cloud может не получиться)
     try:
         with open(HISTORY_PATH, "w", encoding="utf-8") as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
-        st.session_state.history_saved = True
-    except Exception as e:
-        st.warning(f"Не удалось сохранить историю: {e}")
+    except Exception:
+        pass  # не критично — primary в session_state
 
 
 def start_quiz(theme_ids, types, count, answer_mode):
@@ -463,7 +472,7 @@ def screen_start():
         st.caption("📊 Сводка результатов появится после первого пройденного теста.")
     # Явная ссылка на страницу истории — если sidebar свёрнут
     try:
-        st.page_link("pages/01_📊_Тарих.py", label="📊 Открыть историю сессий", icon="📊")
+        st.page_link("pages/1_history.py", label="📊 Открыть историю сессий", icon="📊")
     except Exception:
         # на старых версиях streamlit
         pass
