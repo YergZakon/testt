@@ -268,7 +268,6 @@ def init_state():
         "correct": 0,
         "errors_by_theme": {},        # для подсказок в конце
         "current_q": None,
-        "user_answer": "",
         "feedback": None,             # None | True | False
         "selected_option": None,      # для fill — какую кнопку выбрал
         "answer_mode": "type",        # type | choice | mixed
@@ -350,10 +349,15 @@ def start_quiz(theme_ids, types, count, answer_mode):
     st.session_state.correct = 0
     st.session_state.errors_by_theme = {}
     st.session_state.current_q = build_question(pool[0], set(types), answer_mode)
-    st.session_state.user_answer = ""
     st.session_state.feedback = None
     st.session_state.selected_option = None
     st.session_state.screen = "quiz"
+
+
+def answer_key():
+    """Динамический ключ виджета text_input — меняется на каждом вопросе,
+    чтобы Streamlit не ругался на присвоение в session_state после рендера."""
+    return f"ans_{st.session_state.index}"
 
 
 def next_question():
@@ -363,14 +367,15 @@ def next_question():
         return
     item, allowed = st.session_state.queue[st.session_state.index]
     st.session_state.current_q = build_question(item, allowed, st.session_state.answer_mode)
-    st.session_state.user_answer = ""
     st.session_state.feedback = None
     st.session_state.selected_option = None
+    # user_answer не сбрасываем — у нового вопроса будет новый ключ виджета
 
 
 def submit_text_answer():
     q = st.session_state.current_q
-    correct = check_answer(st.session_state.user_answer, q["expected"])
+    user_answer = st.session_state.get(answer_key(), "")
+    correct = check_answer(user_answer, q["expected"])
     st.session_state.feedback = correct
     if correct:
         st.session_state.correct += 1
@@ -401,20 +406,45 @@ def back_to_start():
 
 
 # ---------------- Виртуальная клавиатура ----------------
-def virtual_kaz_keyboard():
-    """Кнопки вставляют казахские символы в text_input (через session_state)."""
+def _vk_append(input_key, ch):
+    st.session_state[input_key] = (st.session_state.get(input_key) or "") + ch
+
+
+def _vk_backspace(input_key):
+    st.session_state[input_key] = (st.session_state.get(input_key) or "")[:-1]
+
+
+def virtual_kaz_keyboard(input_key):
+    """Кнопки вставляют казахские символы в text_input через on_click callbacks.
+    Колбэки выполняются ДО рендера виджета, поэтому Streamlit не выбрасывает
+    StreamlitAPIException при изменении значения, привязанного к виджету.
+    """
     st.caption("Қазақ әріптерін енгізу үшін батырмаларды басыңыз:")
     cols = st.columns(len(KAZ_KEYS) + 2)
     for i, k in enumerate(KAZ_KEYS):
-        if cols[i].button(k, key=f"vk_{k}", use_container_width=True):
-            st.session_state.user_answer = (st.session_state.get("user_answer") or "") + k
-            st.rerun()
-    if cols[-2].button("␣", key="vk_space", help="пробел", use_container_width=True):
-        st.session_state.user_answer = (st.session_state.get("user_answer") or "") + " "
-        st.rerun()
-    if cols[-1].button("⌫", key="vk_back", help="удалить последний символ", use_container_width=True):
-        st.session_state.user_answer = (st.session_state.get("user_answer") or "")[:-1]
-        st.rerun()
+        cols[i].button(
+            k,
+            key=f"vk_{k}_{input_key}",
+            on_click=_vk_append,
+            args=(input_key, k),
+            use_container_width=True,
+        )
+    cols[-2].button(
+        "␣",
+        key=f"vk_space_{input_key}",
+        help="пробел",
+        on_click=_vk_append,
+        args=(input_key, " "),
+        use_container_width=True,
+    )
+    cols[-1].button(
+        "⌫",
+        key=f"vk_back_{input_key}",
+        help="удалить последний символ",
+        on_click=_vk_backspace,
+        args=(input_key,),
+        use_container_width=True,
+    )
 
 
 # ---------------- Экраны ----------------
@@ -528,16 +558,17 @@ def screen_quiz():
     # ----- Режим текстового ввода -----
     if q["mode"] == "text":
         feedback_disabled = st.session_state.feedback is not None
+        input_key = answer_key()
         st.text_input(
             "Жауабыңызды жазыңыз / Введите ответ",
-            key="user_answer",
+            key=input_key,
             disabled=feedback_disabled,
             label_visibility="collapsed",
             placeholder="Жауап...",
         )
 
         if q.get("show_kaz_keyboard") and not feedback_disabled:
-            virtual_kaz_keyboard()
+            virtual_kaz_keyboard(input_key)
 
         # Кнопки действия
         if st.session_state.feedback is None:
@@ -553,7 +584,8 @@ def screen_quiz():
     # ----- Режим выбора варианта (fill) -----
     else:
         feedback_disabled = st.session_state.feedback is not None
-        for opt in q["options"]:
+        idx = st.session_state.index
+        for i, opt in enumerate(q["options"]):
             is_correct = check_answer(opt, q["expected"])
             is_selected = opt == st.session_state.selected_option
             if feedback_disabled:
@@ -565,7 +597,7 @@ def screen_quiz():
                 else:
                     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;{opt}", unsafe_allow_html=True)
             else:
-                if st.button(opt, key=f"opt_{opt}", use_container_width=True):
+                if st.button(opt, key=f"opt_{idx}_{i}", use_container_width=True):
                     submit_option(opt)
                     st.rerun()
 
@@ -638,7 +670,6 @@ def screen_result():
         st.session_state.aborted = False
         item, allowed = st.session_state.queue[0]
         st.session_state.current_q = build_question(item, allowed, st.session_state.answer_mode)
-        st.session_state.user_answer = ""
         st.session_state.feedback = None
         st.session_state.selected_option = None
         st.session_state.screen = "quiz"
