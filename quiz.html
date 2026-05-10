@@ -143,6 +143,14 @@
       </div>
     </div>
     <div class="group">
+      <div class="group-title">Жауап беру тәсілі (режим ответа)</div>
+      <div class="checkbox-list" id="answer-mode-list">
+        <label><input type="radio" name="answer-mode" value="type" checked> ✍️ Жазу (ввод)</label>
+        <label><input type="radio" name="answer-mode" value="choice"> 🔘 Таңдау (варианты)</label>
+        <label><input type="radio" name="answer-mode" value="mixed"> 🔀 Аралас (смешанный)</label>
+      </div>
+    </div>
+    <div class="group">
       <div class="group-title">Сұрақтар саны</div>
       <div class="checkbox-list">
         <label><input type="radio" name="count" value="10" checked> 10</label>
@@ -246,15 +254,90 @@
     return list.some(e => normalize(e) === norm);
   }
 
+  // ------------- Генерация отвлекающих вариантов -------------
+  function makeDistractors(item, targetKind, n) {
+    n = n || 3;
+    const correct = item[targetKind];
+    const correctNorms = new Set((Array.isArray(correct) ? correct : [correct]).map(normalize));
+
+    function collectPool(strict) {
+      const pool = [];
+      for (const q of QUESTIONS) {
+        if (q === item) continue;
+        if (q.type !== item.type) continue;
+        if (strict && q.theme !== item.theme) continue;
+        const val = q[targetKind];
+        if (val === undefined || val === null) continue;
+        const choice = Array.isArray(val) ? val[0] : val;
+        if (correctNorms.has(normalize(choice))) continue;
+        pool.push(choice);
+      }
+      return pool;
+    }
+
+    let candidates = collectPool(true);
+    if (candidates.length < n) {
+      const seen = new Set(candidates.map(normalize));
+      for (const c of collectPool(false)) {
+        if (seen.has(normalize(c))) continue;
+        seen.add(normalize(c));
+        candidates.push(c);
+        if (candidates.length >= n * 4) break;
+      }
+    }
+
+    // dedup
+    const seen = new Set(), uniq = [];
+    for (const c of candidates) {
+      const k = normalize(c);
+      if (!seen.has(k)) { seen.add(k); uniq.push(c); }
+    }
+    return shuffle(uniq).slice(0, n);
+  }
+
+  function makeChoiceQuestion(item, dir) {
+    const isPhrase = item.type === 'phrase';
+    let prompt, correct, targetKind, label;
+    if (dir === 'kk_ru') {
+      prompt = item.kk;
+      correct = Array.isArray(item.ru) ? item.ru[0] : item.ru;
+      targetKind = 'ru';
+      label = (isPhrase ? 'фраза kk → ru' : 'kk → ru') + ' · таңдау';
+    } else {
+      prompt = Array.isArray(item.ru) ? item.ru[0] : item.ru;
+      correct = item.kk;
+      targetKind = 'kk';
+      label = (isPhrase ? 'фраза ru → kk' : 'ru → kk') + ' · таңдау';
+    }
+    const distractors = makeDistractors(item, targetKind, 3);
+    if (!distractors.length) return null;
+    return {
+      mode: 'options',
+      direction: label,
+      prompt: prompt,
+      hint: 'выберите правильный перевод',
+      expected: correct,
+      options: shuffle([correct].concat(distractors)),
+      showKazKeyboard: false,
+    };
+  }
+
   // ------------- Генерация вопроса из объекта QUESTIONS -------------
-  function buildQuestion(item, allowedTypes) {
-    // Из элемента типа "word" может получиться kk→ru или ru→kk вопрос — в зависимости от allowedTypes
+  function buildQuestion(item, allowedTypes, answerMode) {
+    answerMode = answerMode || 'type';
+    const useChoice = answerMode === 'choice'
+      || (answerMode === 'mixed' && Math.random() < 0.5);
+
     if (item.type === 'word') {
       const variants = [];
       if (allowedTypes.has('word_kk_ru')) variants.push('kk_ru');
       if (allowedTypes.has('word_ru_kk')) variants.push('ru_kk');
       if (variants.length === 0) return null;
       const dir = pickRandom(variants);
+      if (useChoice) {
+        const q = makeChoiceQuestion(item, dir);
+        if (q) return q;
+      }
       if (dir === 'kk_ru') {
         return {
           mode: 'text',
@@ -278,8 +361,11 @@
     }
     if (item.type === 'phrase') {
       if (!allowedTypes.has('phrase')) return null;
-      // У фраз может быть направление либо фиксированное (item.dir), либо случайное
       const dir = item.dir || pickRandom(['kk_ru', 'ru_kk']);
+      if (useChoice) {
+        const q = makeChoiceQuestion(item, dir);
+        if (q) return q;
+      }
       if (dir === 'kk_ru') {
         return {
           mode: 'text',
@@ -323,6 +409,7 @@
     const allowedTypes = new Set(
       Array.from(document.querySelectorAll('#type-list input:checked')).map(cb => cb.value)
     );
+    const answerMode = (document.querySelector('input[name="answer-mode"]:checked') || {}).value || 'type';
 
     if (selectedThemes.size === 0 || allowedTypes.size === 0) {
       alert('Кем дегенде бір тақырып пен бір тапсырма түрін таңдаңыз / Выберите хотя бы одну тему и один тип задания');
@@ -353,7 +440,7 @@
       if (pool.length > n) pool = pool.slice(0, n);
     }
 
-    return { pool, allowedTypes };
+    return { pool, allowedTypes, answerMode };
   }
 
   // ------------- Инициализация UI -------------
@@ -497,9 +584,8 @@
     if (currentIndex >= currentQueue.length) {
       showResult();
     } else {
-      const item = currentQueue[currentIndex].item;
-      const allowedTypes = currentQueue[currentIndex].allowedTypes;
-      currentQuestion = buildQuestion(item, allowedTypes);
+      const slot = currentQueue[currentIndex];
+      currentQuestion = buildQuestion(slot.item, slot.allowedTypes, slot.answerMode);
       renderQuestion();
     }
   }
@@ -523,10 +609,11 @@
     const prep = prepareQueue();
     if (!prep) return;
     const allowedTypes = prep.allowedTypes;
-    currentQueue = prep.pool.map(item => ({ item, allowedTypes }));
+    const answerMode = prep.answerMode;
+    currentQueue = prep.pool.map(item => ({ item, allowedTypes, answerMode }));
     currentIndex = 0;
     correctCount = 0;
-    const first = buildQuestion(currentQueue[0].item, allowedTypes);
+    const first = buildQuestion(currentQueue[0].item, allowedTypes, answerMode);
     if (!first) {
       alert('Не удалось сгенерировать вопрос — проверьте настройки');
       return;
@@ -546,8 +633,8 @@
     currentQueue = shuffle(currentQueue);
     currentIndex = 0;
     correctCount = 0;
-    const first = buildQuestion(currentQueue[0].item, currentQueue[0].allowedTypes);
-    currentQuestion = first;
+    const slot = currentQueue[0];
+    currentQuestion = buildQuestion(slot.item, slot.allowedTypes, slot.answerMode);
     renderQuestion();
   }
 

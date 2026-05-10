@@ -69,8 +69,106 @@ def check_answer(user_input: str, expected) -> bool:
     return any(normalize(e) == norm for e in expected)
 
 
-def build_question(item, allowed_types):
-    """Из элемента базы делает конкретный вопрос (с выбранным направлением)."""
+def make_distractors(item, target_kind, n=3):
+    """Берёт n случайных «неправильных» вариантов того же типа и темы.
+
+    target_kind: 'ru' (нужен русский эквивалент) или 'kk' (казахский).
+    """
+    correct = item["ru"] if target_kind == "ru" else item["kk"]
+    correct_norms = set(normalize(c) for c in (correct if isinstance(correct, list) else [correct]))
+
+    candidates = []
+    for q in QUESTIONS:
+        if q is item:
+            continue
+        if q["type"] != item["type"]:
+            continue
+        if q["theme"] != item["theme"]:
+            continue
+        val = q.get(target_kind)
+        if val is None:
+            continue
+        choice = val[0] if isinstance(val, list) else val
+        if normalize(choice) in correct_norms:
+            continue
+        candidates.append(choice)
+
+    # запасной план — расширяем поиск на другие темы того же типа
+    if len(candidates) < n:
+        for q in QUESTIONS:
+            if q is item or q["type"] != item["type"]:
+                continue
+            val = q.get(target_kind)
+            if val is None:
+                continue
+            choice = val[0] if isinstance(val, list) else val
+            if normalize(choice) in correct_norms or choice in candidates:
+                continue
+            candidates.append(choice)
+            if len(candidates) >= n * 4:
+                break
+
+    if not candidates:
+        return []
+
+    # убираем дубли с сохранением порядка
+    seen, uniq = set(), []
+    for c in candidates:
+        key = normalize(c)
+        if key not in seen:
+            seen.add(key)
+            uniq.append(c)
+
+    random.shuffle(uniq)
+    return uniq[:n]
+
+
+def make_choice_question(item, direction):
+    """word/phrase в режиме «варианты на выбор» (kk→ru или ru→kk)."""
+    is_phrase = item["type"] == "phrase"
+    if direction == "kk_ru":
+        prompt = item["kk"]
+        correct = item["ru"][0] if isinstance(item["ru"], list) else item["ru"]
+        target_kind = "ru"
+        direction_label = ("фраза kk → ru" if is_phrase else "kk → ru") + " · таңдау"
+        hint = "выберите правильный перевод"
+    else:
+        prompt = item["ru"][0] if isinstance(item["ru"], list) else item["ru"]
+        correct = item["kk"]
+        target_kind = "kk"
+        direction_label = ("фраза ru → kk" if is_phrase else "ru → kk") + " · таңдау"
+        hint = "выберите правильный перевод"
+
+    distractors = make_distractors(item, target_kind, n=3)
+    if not distractors:
+        # без отвлекающих — режим выбора не имеет смысла, скажет вызывающий
+        return None
+
+    options = [correct] + distractors
+    random.shuffle(options)
+    return {
+        "mode": "options",
+        "direction": direction_label,
+        "prompt": prompt,
+        "hint": hint,
+        "expected": correct,
+        "options": options,
+        "show_kaz_keyboard": False,
+        "theme": item["theme"],
+    }
+
+
+def build_question(item, allowed_types, answer_mode="type"):
+    """Из элемента базы делает конкретный вопрос.
+
+    answer_mode: 'type' — текстовый ввод; 'choice' — варианты; 'mixed' — случайно.
+    """
+    # Для word/phrase решаем — ввод или варианты
+    use_choice_for_word_phrase = (
+        answer_mode == "choice"
+        or (answer_mode == "mixed" and random.random() < 0.5)
+    )
+
     if item["type"] == "word":
         variants = []
         if "word_kk_ru" in allowed_types:
@@ -80,6 +178,13 @@ def build_question(item, allowed_types):
         if not variants:
             return None
         direction = random.choice(variants)
+
+        if use_choice_for_word_phrase:
+            q = make_choice_question(item, direction)
+            if q:
+                return q
+            # если не получилось набрать distractors — fallback к вводу
+
         if direction == "kk_ru":
             return {
                 "mode": "text",
@@ -105,6 +210,12 @@ def build_question(item, allowed_types):
         if "phrase" not in allowed_types:
             return None
         direction = item.get("dir") or random.choice(["kk_ru", "ru_kk"])
+
+        if use_choice_for_word_phrase:
+            q = make_choice_question(item, direction)
+            if q:
+                return q
+
         if direction == "kk_ru":
             return {
                 "mode": "text",
@@ -157,13 +268,14 @@ def init_state():
         "user_answer": "",
         "feedback": None,             # None | True | False
         "selected_option": None,      # для fill — какую кнопку выбрал
+        "answer_mode": "type",        # type | choice | mixed
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
 
-def start_quiz(theme_ids, types, count):
+def start_quiz(theme_ids, types, count, answer_mode):
     pool = [q for q in QUESTIONS if q["theme"] in theme_ids]
     pool = [
         q for q in pool
@@ -177,11 +289,12 @@ def start_quiz(theme_ids, types, count):
     random.shuffle(pool)
     if count != "all":
         pool = pool[: int(count)]
+    st.session_state.answer_mode = answer_mode
     st.session_state.queue = [(item, set(types)) for item in pool]
     st.session_state.index = 0
     st.session_state.correct = 0
     st.session_state.errors_by_theme = {}
-    st.session_state.current_q = build_question(pool[0], set(types))
+    st.session_state.current_q = build_question(pool[0], set(types), answer_mode)
     st.session_state.user_answer = ""
     st.session_state.feedback = None
     st.session_state.selected_option = None
@@ -194,7 +307,7 @@ def next_question():
         st.session_state.screen = "result"
         return
     item, allowed = st.session_state.queue[st.session_state.index]
-    st.session_state.current_q = build_question(item, allowed)
+    st.session_state.current_q = build_question(item, allowed, st.session_state.answer_mode)
     st.session_state.user_answer = ""
     st.session_state.feedback = None
     st.session_state.selected_option = None
@@ -285,6 +398,20 @@ def screen_start():
         if col.checkbox(label, value=True, key=f"type_{key}"):
             selected_types.append(key)
 
+    st.subheader("Жауап беру тәсілі (режим ответа)")
+    st.caption("Применяется к словам и фразам · упражнения с пропусками всегда показываются как варианты")
+    answer_mode = st.radio(
+        "Режим ответа",
+        options=["type", "choice", "mixed"],
+        format_func=lambda x: {
+            "type":   "✍️ Жазу (ввод текста)",
+            "choice": "🔘 Таңдау (4 варианта)",
+            "mixed":  "🔀 Аралас (ввод и варианты случайно)",
+        }[x],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
     st.subheader("Сұрақтар саны")
     count = st.radio(
         "Количество вопросов",
@@ -301,7 +428,7 @@ def screen_start():
         elif not selected_types:
             st.error("Кем дегенде бір тапсырма түрін таңдаңыз / Выберите хотя бы один тип задания")
         else:
-            start_quiz(selected_themes, selected_types, count)
+            start_quiz(selected_themes, selected_types, count, answer_mode)
             st.rerun()
 
 
@@ -435,7 +562,7 @@ def screen_result():
         st.session_state.correct = 0
         st.session_state.errors_by_theme = {}
         item, allowed = st.session_state.queue[0]
-        st.session_state.current_q = build_question(item, allowed)
+        st.session_state.current_q = build_question(item, allowed, st.session_state.answer_mode)
         st.session_state.user_answer = ""
         st.session_state.feedback = None
         st.session_state.selected_option = None
