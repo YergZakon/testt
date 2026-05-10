@@ -5,7 +5,12 @@ from pathlib import Path
 
 import streamlit as st
 
-st.set_page_config(page_title="Тарих · История сессий", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="Тарих · История сессий",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 HISTORY_PATH = Path(__file__).parent.parent / "history.json"
 
@@ -129,18 +134,28 @@ st.markdown("---")
 st.subheader("Все сессии")
 
 # Фильтры
-filter_cols = st.columns([1, 1, 2])
+filter_cols = st.columns([1, 1, 1, 1])
 mode_filter = filter_cols[0].selectbox(
     "Режим ответа",
     options=["все", "type", "choice", "mixed"],
     format_func=lambda x: "все" if x == "все" else ANSWER_MODE_LABEL[x],
 )
-min_pct = filter_cols[1].slider("Минимальный %", 0, 100, 0, step=10)
+status_filter = filter_cols[1].selectbox(
+    "Статус",
+    options=["все", "completed", "aborted"],
+    format_func=lambda x: {"все": "все", "completed": "✓ только пройденные", "aborted": "⊘ только прерванные"}[x],
+)
+min_pct = filter_cols[2].slider("Минимальный %", 0, 100, 0, step=10)
+filter_cols[3].caption(" ")  # выравниваем
 
 # Применяем фильтры
 filtered = history
 if mode_filter != "все":
     filtered = [r for r in filtered if r.get("answer_mode") == mode_filter]
+if status_filter == "completed":
+    filtered = [r for r in filtered if r.get("completed", True)]
+elif status_filter == "aborted":
+    filtered = [r for r in filtered if not r.get("completed", True)]
 filtered = [r for r in filtered if r["percent"] >= min_pct]
 
 # Показываем в обратном порядке — новые сверху
@@ -153,16 +168,20 @@ else:
     for r in filtered:
         types_short = ", ".join(TYPE_SHORT.get(t, t) for t in r.get("types", []))
         themes_short = ", ".join(str(t) for t in r.get("themes", []))
+        completed = r.get("completed", True)
+        answered = r.get("answered", r["total"])
         rows.append({
             "Когда": fmt_ts(r["ts"]),
+            "✓": "✓" if completed else "⊘",
             "Темы": themes_short,
             "Типы": types_short,
             "Режим": ANSWER_MODE_LABEL.get(r.get("answer_mode", "type"), r.get("answer_mode", "?")),
-            "Всего": r["total"],
+            "Прошёл": f"{answered} / {r['total']}",
             "Дұрыс": r["correct"],
             "%": r["percent"],
         })
     st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.caption("✓ — тест пройден до конца · ⊘ — прерван кнопкой «Шығу»")
 
 st.markdown("---")
 

@@ -18,6 +18,7 @@ st.set_page_config(
     page_title="Бәйшешек — қазақ тілі тесті",
     page_icon="📚",
     layout="centered",
+    initial_sidebar_state="expanded",
 )
 
 DATA_PATH = Path(__file__).parent / "data.json"
@@ -274,6 +275,7 @@ def init_state():
         "session_themes": [],         # темы текущей сессии (для истории)
         "session_types": [],          # типы текущей сессии (для истории)
         "history_saved": False,       # флаг — записали ли в history.json
+        "aborted": False,             # True если пользователь нажал «Шығу» досрочно
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -298,6 +300,9 @@ def save_session_to_history():
     if not st.session_state.queue:
         return
     theme_id_to_name = {t["id"]: t["name"] for t in THEMES}
+    answered = st.session_state.index + (1 if st.session_state.feedback is not None else 0)
+    if st.session_state.aborted:
+        answered = min(answered, len(st.session_state.queue))
     record = {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "themes": st.session_state.session_themes,
@@ -305,9 +310,10 @@ def save_session_to_history():
         "types": st.session_state.session_types,
         "answer_mode": st.session_state.answer_mode,
         "total": len(st.session_state.queue),
+        "answered": answered,
         "correct": st.session_state.correct,
-        "percent": round(st.session_state.correct / len(st.session_state.queue) * 100)
-                   if st.session_state.queue else 0,
+        "percent": round(st.session_state.correct / answered * 100) if answered else 0,
+        "completed": not st.session_state.aborted,
         "errors_by_theme": {str(k): v for k, v in st.session_state.errors_by_theme.items()},
     }
     history = load_history()
@@ -338,6 +344,7 @@ def start_quiz(theme_ids, types, count, answer_mode):
     st.session_state.session_themes = list(theme_ids)
     st.session_state.session_types = list(types)
     st.session_state.history_saved = False
+    st.session_state.aborted = False
     st.session_state.queue = [(item, set(types)) for item in pool]
     st.session_state.index = 0
     st.session_state.correct = 0
@@ -417,13 +424,19 @@ def screen_start():
     history = load_history()
     if history:
         last = history[-1]
+        completed_mark = "✓" if last.get("completed", True) else "⊘"
         st.caption(
             f"💾 Сохранено сессий: **{len(history)}** · "
-            f"последняя: {last['correct']}/{last['total']} ({last['percent']}%) · "
-            f"подробности — на странице **«📊 Тарих»** в боковом меню"
+            f"последняя: {completed_mark} {last['correct']}/{last['total']} ({last['percent']}%)"
         )
     else:
-        st.caption("📊 Сводка результатов появится в боковом меню «Тарих» после первого теста.")
+        st.caption("📊 Сводка результатов появится после первого пройденного теста.")
+    # Явная ссылка на страницу истории — если sidebar свёрнут
+    try:
+        st.page_link("pages/01_📊_Тарих.py", label="📊 Открыть историю сессий", icon="📊")
+    except Exception:
+        # на старых версиях streamlit
+        pass
 
     counts = {"word": 0, "phrase": 0, "fill": 0}
     for q in QUESTIONS:
@@ -565,6 +578,7 @@ def screen_quiz():
     # Кнопка выхода
     st.markdown("---")
     if st.button("Шығу · Завершить", use_container_width=False):
+        st.session_state.aborted = True
         st.session_state.screen = "result"
         st.rerun()
 
@@ -621,6 +635,7 @@ def screen_result():
         st.session_state.correct = 0
         st.session_state.errors_by_theme = {}
         st.session_state.history_saved = False
+        st.session_state.aborted = False
         item, allowed = st.session_state.queue[0]
         st.session_state.current_q = build_question(item, allowed, st.session_state.answer_mode)
         st.session_state.user_answer = ""
