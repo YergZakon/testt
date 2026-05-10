@@ -99,6 +99,31 @@ else:
         "может не сохраняться между рестартами — используй кнопку «Скачать» внизу."
     )
 
+# ---------------- Диагностика ----------------
+with st.expander("🔧 Диагностика хранилища (если что-то не работает)", expanded=False):
+    st.write("**Записей в session_state:**", len(st.session_state.get("history_records", [])))
+    st.write("**Файл `history.json` существует:**", HISTORY_PATH.exists())
+    st.write("**Путь к файлу:**", str(HISTORY_PATH))
+    st.write("**Streamlit version:**", st.__version__)
+    st.write("**Ключи session_state:**", sorted(list(st.session_state.keys())))
+    if st.button("➕ Добавить тестовую запись (чтобы проверить отображение)"):
+        sample = {
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "themes": [7, 8],
+            "theme_names": ["Денсаулық", "Қазақстан"],
+            "types": ["word_kk_ru", "phrase"],
+            "answer_mode": "type",
+            "total": 5,
+            "answered": 5,
+            "correct": 4,
+            "percent": 80,
+            "completed": True,
+            "errors_by_theme": {"7": 1},
+        }
+        save_history(history + [sample])
+        st.success("Тестовая запись добавлена.")
+        st.rerun()
+
 # ---------------- Загрузка из файла ----------------
 with st.expander("⬆️ Загрузить из файла (восстановление)", expanded=False):
     uploaded = st.file_uploader(

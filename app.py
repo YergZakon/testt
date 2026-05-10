@@ -640,6 +640,16 @@ def show_feedback():
 def screen_result():
     save_session_to_history()
     st.title("🏁 Тест аяқталды!")
+    history_count = len(st.session_state.get("history_records", []))
+    st.success(
+        f"💾 Результат сохранён в историю · всего записей: **{history_count}** · "
+        f"посмотреть на странице **«📊 history»** (в боковом меню)"
+    )
+    try:
+        st.page_link("pages/1_history.py", label="📊 Открыть историю", icon="📊")
+    except Exception:
+        pass
+
     total = len(st.session_state.queue)
     correct = st.session_state.correct
     pct = round(correct / total * 100) if total else 0
